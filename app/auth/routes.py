@@ -3,12 +3,15 @@ from urllib.parse import urlsplit
 from flask_login import login_user, logout_user, current_user
 from flask_babel import _
 import sqlalchemy as sa
+from opentelemetry import trace
 from app import db
 from app.auth import bp
 from app.auth.forms import LoginForm, RegistrationForm, \
     ResetPasswordRequestForm, ResetPasswordForm
 from app.models import User
 from app.auth.email import send_password_reset_email
+
+tracer = trace.get_tracer(__name__)
 
 
 @bp.route('/login', methods=['GET', 'POST'])
@@ -20,9 +23,13 @@ def login():
         user = db.session.scalar(
             sa.select(User).where(User.username == form.username.data))
         if user is None or not user.check_password(form.password.data):
+            span = trace.get_current_span()
+            span.set_attribute('app.auth.login.result', 'invalid_credentials')
             flash(_('Invalid username or password'))
             return redirect(url_for('auth.login'))
         login_user(user, remember=form.remember_me.data)
+        span = trace.get_current_span()
+        span.set_attribute('app.auth.login.result', 'success')
         next_page = request.args.get('next')
         if not next_page or urlsplit(next_page).netloc != '':
             next_page = url_for('main.index')
