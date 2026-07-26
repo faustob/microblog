@@ -32,6 +32,9 @@ def create_app(config_class=Config):
     app = Flask(__name__)
     app.config.from_object(config_class)
 
+    from app.telemetry import init_telemetry
+    init_telemetry(app)
+
     db.init_app(app)
     migrate.init_app(app, db)
     login.init_app(app)

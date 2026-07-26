@@ -1,3 +1,4 @@
+import app.telemetry  # Auto-wired by TelemetryOS: activates the OTel SDK at startup (module-level setup).
 import sqlalchemy as sa
 import sqlalchemy.orm as so
 from app import create_app, db
