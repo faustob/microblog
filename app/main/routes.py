@@ -11,6 +11,7 @@ from app.main.forms import EditProfileForm, EmptyForm, PostForm, SearchForm, \
 from app.models import User, Post, Message, Notification
 from app.translate import translate
 from app.main import bp
+from app.telemetry import web_vital_duration, web_vital_reports
 
 
 @bp.before_app_request
@@ -225,6 +226,35 @@ def export_posts():
         current_user.launch_task('export_posts', _('Exporting posts...'))
         db.session.commit()
     return redirect(url_for('main.user', username=current_user.username))
+
+
+WEB_VITAL_UNITS = {'lcp': 's', 'inp': 's', 'cls': '1', 'fcp': 's', 'ttfb': 's'}
+
+
+@bp.route('/vitals', methods=['POST'])
+def vitals():
+    """Receive Core Web Vitals measurements reported by the browser and record
+    them with the server-side OpenTelemetry meter."""
+    data = request.get_json(silent=True) or {}
+    name = str(data.get('name', '')).lower()
+    route = str(data.get('route', '')) or 'unknown'
+    if name not in WEB_VITAL_UNITS or route not in current_app.config[
+            'WEB_VITAL_ROUTES']:
+        return {'status': 'ignored'}, 202
+    try:
+        value = float(data.get('value'))
+    except (TypeError, ValueError):
+        return {'status': 'ignored'}, 202
+    attributes = {
+        'web.vital.name': name,
+        'http.route': route,
+        'device.class': 'mobile' if data.get('mobile') else 'desktop',
+    }
+    # LCP/INP/FCP/TTFB arrive in milliseconds; record durations in seconds.
+    web_vital_duration.record(
+        value / 1000.0 if WEB_VITAL_UNITS[name] == 's' else value, attributes)
+    web_vital_reports.add(1, attributes)
+    return {'status': 'ok'}, 202
 
 
 @bp.route('/notifications')

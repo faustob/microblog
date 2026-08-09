@@ -11,7 +11,9 @@ from flask_babel import Babel, lazy_gettext as _l
 from elasticsearch import Elasticsearch
 from redis import Redis
 import rq
+from opentelemetry.instrumentation.flask import FlaskInstrumentor
 from config import Config
+from app.telemetry import init_telemetry
 
 
 def get_locale():
@@ -31,6 +33,11 @@ babel = Babel()
 def create_app(config_class=Config):
     app = Flask(__name__)
     app.config.from_object(config_class)
+
+    # Register the OpenTelemetry SDK globally before anything is served, then
+    # attach the Flask auto-instrumentation (http.server.request.duration).
+    init_telemetry()
+    FlaskInstrumentor().instrument_app(app)
 
     db.init_app(app)
     migrate.init_app(app, db)

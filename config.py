@@ -23,3 +23,9 @@ class Config:
     ELASTICSEARCH_URL = os.environ.get('ELASTICSEARCH_URL')
     REDIS_URL = os.environ.get('REDIS_URL') or 'redis://'
     POSTS_PER_PAGE = 25
+    # Low-cardinality allow-list of route templates accepted by /vitals.
+    WEB_VITAL_ROUTES = ['/', '/index', '/explore', '/user/<username>',
+                        '/messages', '/search', '/edit_profile',
+                        '/send_message/<recipient>', '/auth/login',
+                        '/auth/register', 'other', 'unknown']
+    OTEL_SERVICE_NAME = os.environ.get('OTEL_SERVICE_NAME') or 'microblog'

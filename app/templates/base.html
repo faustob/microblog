@@ -94,6 +94,10 @@
     </script>
     {{ moment.include_moment() }}
     {{ moment.lang(g.locale) }}
+    <script type="module"
+            src="{{ url_for('static', filename='vitals.js') }}"
+            data-route="{{ request.url_rule.rule if request.url_rule else 'unknown' }}"
+            data-endpoint="{{ url_for('main.vitals') }}"></script>
     <script>
       async function translate(sourceElem, destElem, sourceLang, destLang) {
         document.getElementById(destElem).innerHTML = 
