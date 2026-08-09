@@ -11,6 +11,7 @@ from app.main.forms import EditProfileForm, EmptyForm, PostForm, SearchForm, \
 from app.models import User, Post, Message, Notification
 from app.translate import translate
 from app.main import bp
+from app.telemetry import record_web_vital
 
 
 @bp.before_app_request
@@ -225,6 +226,23 @@ def export_posts():
         current_user.launch_task('export_posts', _('Exporting posts...'))
         db.session.commit()
     return redirect(url_for('main.user', username=current_user.username))
+
+
+@bp.route('/vitals', methods=['POST'])
+def vitals():
+    """Collect Core Web Vitals (LCP, INP, ...) reported by the browser and
+    record them as OpenTelemetry metrics on the server."""
+    data = request.get_json(silent=True) or {}
+    metrics_in = data.get('metrics')
+    if metrics_in is None:
+        metrics_in = [data]
+    for item in metrics_in:
+        if not isinstance(item, dict):
+            continue
+        record_web_vital(item.get('name'), item.get('value'),
+                         item.get('route'), item.get('rating'),
+                         item.get('navigation_type'))
+    return '', 204
 
 
 @bp.route('/notifications')

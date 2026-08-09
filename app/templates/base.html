@@ -94,6 +94,30 @@
     </script>
     {{ moment.include_moment() }}
     {{ moment.lang(g.locale) }}
+    <script type="module">
+      // Core Web Vitals (LCP, INP) RUM reporter. Measurements are POSTed to the
+      // server, which records them as OpenTelemetry metrics.
+      import {onLCP, onINP} from 'https://cdn.jsdelivr.net/npm/web-vitals@4/dist/web-vitals.attribution.js';
+      const vitalsRoute = {{ (request.url_rule.rule if request.url_rule else 'unknown')|tojson }};
+      const vitalsUrl = {{ url_for('main.vitals')|tojson }};
+      function reportVital(metric) {
+        const body = JSON.stringify({
+          name: metric.name,
+          value: metric.value,
+          rating: metric.rating,
+          navigation_type: metric.navigationType,
+          route: vitalsRoute
+        });
+        if (navigator.sendBeacon) {
+          navigator.sendBeacon(vitalsUrl, new Blob([body], {type: 'application/json'}));
+        } else {
+          fetch(vitalsUrl, {method: 'POST', body: body, keepalive: true,
+                            headers: {'Content-Type': 'application/json'}});
+        }
+      }
+      onLCP(reportVital);
+      onINP(reportVital);
+    </script>
     <script>
       async function translate(sourceElem, destElem, sourceLang, destLang) {
         document.getElementById(destElem).innerHTML = 

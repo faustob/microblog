@@ -29,6 +29,9 @@ babel = Babel()
 
 
 def create_app(config_class=Config):
+    from app.telemetry import init_otel
+    init_otel()
+
     app = Flask(__name__)
     app.config.from_object(config_class)
 
