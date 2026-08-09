@@ -11,6 +11,7 @@ from app.main.forms import EditProfileForm, EmptyForm, PostForm, SearchForm, \
 from app.models import User, Post, Message, Notification
 from app.translate import translate
 from app.main import bp
+from app.telemetry import record_web_vital
 
 
 @bp.before_app_request
@@ -225,6 +226,19 @@ def export_posts():
         current_user.launch_task('export_posts', _('Exporting posts...'))
         db.session.commit()
     return redirect(url_for('main.user', username=current_user.username))
+
+
+@bp.route('/api/vitals', methods=['POST'])
+def vitals():
+    data = request.get_json(silent=True) or {}
+    metrics = data.get('metrics')
+    if not isinstance(metrics, list):
+        metrics = [data]
+    for item in metrics:
+        if isinstance(item, dict):
+            record_web_vital(item.get('name'), item.get('value'),
+                             item.get('route'))
+    return '', 204
 
 
 @bp.route('/notifications')
