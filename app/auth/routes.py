@@ -9,6 +9,14 @@ from app.auth.forms import LoginForm, RegistrationForm, \
     ResetPasswordRequestForm, ResetPasswordForm
 from app.models import User
 from app.auth.email import send_password_reset_email
+from app.vitals import register_vitals_routes
+
+# Wire the Real User Monitoring (Core Web Vitals) endpoints onto this
+# blueprint: `/auth/vitals.js` serves the browser reporter and `/auth/vitals`
+# ingests LCP/INP measurements into the server meter.  Importing app.vitals
+# also imports app.telemetry, which registers the global OpenTelemetry
+# providers once, at application import time (before any request is served).
+register_vitals_routes(bp)
 
 
 @bp.route('/login', methods=['GET', 'POST'])
