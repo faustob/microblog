@@ -51,4 +51,8 @@ SQLAlchemy==2.0.23
 typing_extensions==4.8.0
 urllib3==2.1.0
 Werkzeug==3.0.1
+opentelemetry-api==1.44.0
+opentelemetry-sdk==1.44.0
+opentelemetry-exporter-otlp==1.44.0
+opentelemetry-instrumentation-flask==0.65b0
 WTForms==3.1.1

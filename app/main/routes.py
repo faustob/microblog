@@ -11,6 +11,7 @@ from app.main.forms import EditProfileForm, EmptyForm, PostForm, SearchForm, \
 from app.models import User, Post, Message, Notification
 from app.translate import translate
 from app.main import bp
+from app.telemetry import record_web_vital
 
 
 @bp.before_app_request
@@ -151,6 +152,15 @@ def unfollow(username):
         return redirect(url_for('main.user', username=username))
     else:
         return redirect(url_for('main.index'))
+
+
+@bp.route('/api/vitals', methods=['POST'])
+def web_vitals():
+    data = request.get_json(silent=True) or {}
+    record_web_vital(data.get('name'), data.get('value'),
+                     data.get('route'), data.get('rating'),
+                     data.get('navigation_type'))
+    return '', 204
 
 
 @bp.route('/translate', methods=['POST'])

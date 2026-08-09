@@ -111,6 +111,34 @@
         document.getElementById(destElem).innerText = data.text;
       }
 
+      (function reportWebVitals() {
+        const endpoint = '{{ url_for('main.web_vitals') }}';
+        const route = '{{ request.url_rule.rule if request.url_rule else 'unknown' }}';
+        function send(metric) {
+          const body = JSON.stringify({
+            name: metric.name,
+            value: metric.value,
+            rating: metric.rating,
+            navigation_type: metric.navigationType,
+            route: route
+          });
+          if (navigator.sendBeacon) {
+            navigator.sendBeacon(endpoint, new Blob([body], {type: 'application/json'}));
+          } else {
+            fetch(endpoint, {
+              method: 'POST',
+              headers: {'Content-Type': 'application/json'},
+              body: body,
+              keepalive: true
+            });
+          }
+        }
+        import('https://unpkg.com/web-vitals@4?module').then(({onLCP, onINP}) => {
+          onLCP(send);
+          onINP(send);
+        }).catch(() => {});
+      })();
+
       function initialize_popovers() {
         const popups = document.getElementsByClassName('user_popup');
         for (let i = 0; i < popups.length; i++) {
