@@ -9,6 +9,15 @@ from app.auth.forms import LoginForm, RegistrationForm, \
     ResetPasswordRequestForm, ResetPasswordForm
 from app.models import User
 from app.auth.email import send_password_reset_email
+from app.telemetry import init_telemetry
+from app.web_vitals import register_web_vitals
+
+# The auth blueprint module is imported by create_app(), so this is the first
+# code that runs at application startup: register the OpenTelemetry SDK as the
+# global provider (once per process) and install the browser Core Web Vitals
+# (RUM) receiver + reporter snippet on the Flask application.
+init_telemetry()
+register_web_vitals(bp)
 
 
 @bp.route('/login', methods=['GET', 'POST'])
