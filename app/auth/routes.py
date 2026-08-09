@@ -1,5 +1,8 @@
 from flask import render_template, redirect, url_for, flash, request
 from urllib.parse import urlsplit
+from flask import current_app
+from markupsafe import escape
+from app.telemetry import web_vital_inp, web_vital_lcp
 from flask_login import login_user, logout_user, current_user
 from flask_babel import _
 import sqlalchemy as sa
@@ -34,6 +37,72 @@ def login():
 def logout():
     logout_user()
     return redirect(url_for('main.index'))
+
+
+# --- Real User Monitoring (Core Web Vitals) -------------------------------
+# Browser-reported LCP / INP are ingested here and recorded on the server
+# meter (web.vital.lcp / web.vital.inp), dimensioned by the matched Flask
+# route template and the device class.
+_WEB_VITAL_INSTRUMENTS = {'LCP': web_vital_lcp, 'INP': web_vital_inp}
+
+
+def _safe_route(route):
+    """Keep http.route low cardinality: only accept known route templates."""
+    if not route:
+        return 'unknown'
+    for rule in current_app.url_map.iter_rules():
+        if rule.rule == route:
+            return route
+    return 'other'
+
+
+@bp.route('/vitals', methods=['POST'])
+def report_web_vitals():
+    payload = request.get_json(silent=True) or {}
+    samples = payload.get('metrics')
+    if not isinstance(samples, list):
+        samples = [payload]
+    attributes = {
+        'http.route': _safe_route(payload.get('route')),
+        'device.type': 'mobile' if payload.get('mobile') else 'desktop',
+    }
+    for sample in samples:
+        if not isinstance(sample, dict):
+            continue
+        instrument = _WEB_VITAL_INSTRUMENTS.get(
+            str(sample.get('name', '')).upper())
+        value = sample.get('value')
+        if instrument is None or isinstance(value, bool) or \
+                not isinstance(value, (int, float)):
+            continue
+        if value < 0 or value > 3600000:
+            continue
+        instrument.record(float(value), attributes)
+    return '', 204
+
+
+@bp.after_app_request
+def inject_web_vitals_reporter(response):
+    """Add the client-side web-vitals reporter script to HTML pages."""
+    try:
+        if response.direct_passthrough or response.mimetype != 'text/html':
+            return response
+        body = response.get_data()
+        if b'</body>' not in body:
+            return response
+        tag = (
+            '<script src="{}" data-endpoint="{}" data-route="{}" defer>'
+            '</script>'
+        ).format(
+            escape(url_for('static', filename='js/web_vitals_reporter.js')),
+            escape(url_for('auth.report_web_vitals')),
+            escape(request.url_rule.rule if request.url_rule else 'unknown'),
+        ).encode('utf-8')
+        response.set_data(body.replace(b'</body>', tag + b'</body>', 1))
+    except Exception:  # telemetry must never break a page response
+        current_app.logger.debug(
+            'web vitals reporter injection skipped', exc_info=True)
+    return response
 
 
 @bp.route('/register', methods=['GET', 'POST'])
