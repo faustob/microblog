@@ -141,6 +141,42 @@
       }
       document.addEventListener('DOMContentLoaded', initialize_popovers);
 
+      // Core Web Vitals (LCP / INP) reporter: collects measurements in the
+      // browser and POSTs them to the server, which records them as OTel
+      // metrics. No OTel APIs run in the browser.
+      (function() {
+        const vitalsRoute = {{ (request.url_rule.rule if request.url_rule else 'unmatched') | tojson }};
+        const vitalsUrl = {{ url_for('main.vitals') | tojson }};
+        function sendVital(metric) {
+          const body = JSON.stringify({
+            name: metric.name,
+            value: metric.value,
+            rating: metric.rating,
+            route: vitalsRoute
+          });
+          if (navigator.sendBeacon) {
+            navigator.sendBeacon(vitalsUrl, new Blob([body], {type: 'application/json'}));
+          } else {
+            fetch(vitalsUrl, {
+              method: 'POST',
+              headers: {'Content-Type': 'application/json'},
+              body: body,
+              keepalive: true
+            });
+          }
+        }
+        const s = document.createElement('script');
+        s.src = 'https://unpkg.com/web-vitals@4/dist/web-vitals.iife.js';
+        s.onload = function() {
+          if (!window.webVitals) {
+            return;
+          }
+          window.webVitals.onLCP(sendVital);
+          window.webVitals.onINP(sendVital);
+        };
+        document.head.appendChild(s);
+      })();
+
       function set_message_count(n) {
         const count = document.getElementById('message_count');
         count.innerText = n;

@@ -11,6 +11,7 @@ from app.main.forms import EditProfileForm, EmptyForm, PostForm, SearchForm, \
 from app.models import User, Post, Message, Notification
 from app.translate import translate
 from app.main import bp
+from app.telemetry import record_web_vital
 
 
 @bp.before_app_request
@@ -160,6 +161,16 @@ def translate_text():
     return {'text': translate(data['text'],
                               data['source_language'],
                               data['dest_language'])}
+
+
+@bp.route('/vitals', methods=['POST'])
+def vitals():
+    """Receive Core Web Vitals (LCP, INP, ...) reported by the browser and
+    record them with the server-side OpenTelemetry meter."""
+    data = request.get_json(silent=True) or {}
+    record_web_vital(data.get('name'), data.get('value'),
+                     data.get('route'), data.get('rating'))
+    return '', 204
 
 
 @bp.route('/search')
