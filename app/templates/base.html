@@ -141,6 +141,36 @@
       }
       document.addEventListener('DOMContentLoaded', initialize_popovers);
 
+      // Core Web Vitals (LCP / INP) RUM reporter. Measurements are collected in
+      // the browser and POSTed to the server, which records them as OTel metrics.
+      (function () {
+        const vitalsRoute = {{ (request.url_rule.rule if request.url_rule else 'unknown') | tojson }};
+        const vitalsEndpoint = {{ url_for('main.vitals') | tojson }};
+        function sendVital(metric) {
+          const body = JSON.stringify({
+            name: metric.name,
+            value: metric.value,
+            rating: metric.rating,
+            route: vitalsRoute
+          });
+          if (navigator.sendBeacon) {
+            navigator.sendBeacon(vitalsEndpoint,
+              new Blob([body], {type: 'application/json'}));
+          } else {
+            fetch(vitalsEndpoint, {
+              method: 'POST',
+              headers: {'Content-Type': 'application/json'},
+              body: body,
+              keepalive: true
+            });
+          }
+        }
+        import('https://unpkg.com/web-vitals@4?module').then(function (webVitals) {
+          webVitals.onLCP(sendVital);
+          webVitals.onINP(sendVital);
+        }).catch(function () { /* vitals reporting is best-effort */ });
+      })();
+
       function set_message_count(n) {
         const count = document.getElementById('message_count');
         count.innerText = n;

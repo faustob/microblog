@@ -12,6 +12,7 @@ from elasticsearch import Elasticsearch
 from redis import Redis
 import rq
 from config import Config
+from app.telemetry import init_telemetry
 
 
 def get_locale():
@@ -31,6 +32,10 @@ babel = Babel()
 def create_app(config_class=Config):
     app = Flask(__name__)
     app.config.from_object(config_class)
+
+    # Register the global OpenTelemetry SDK + Flask auto-instrumentation once,
+    # before any request is served.
+    init_telemetry(app)
 
     db.init_app(app)
     migrate.init_app(app, db)

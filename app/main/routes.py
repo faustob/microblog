@@ -11,6 +11,7 @@ from app.main.forms import EditProfileForm, EmptyForm, PostForm, SearchForm, \
 from app.models import User, Post, Message, Notification
 from app.translate import translate
 from app.main import bp
+from app.telemetry import WEB_VITAL_HISTOGRAMS, web_vital_reports
 
 
 @bp.before_app_request
@@ -160,6 +161,30 @@ def translate_text():
     return {'text': translate(data['text'],
                               data['source_language'],
                               data['dest_language'])}
+
+
+@bp.route('/vitals', methods=['POST'])
+def vitals():
+    """Receive Core Web Vitals (LCP/INP/...) measured in the browser and record
+    them as server-side OpenTelemetry metrics."""
+    data = request.get_json(silent=True) or {}
+    name = str(data.get('name', '')).lower()
+    histogram = WEB_VITAL_HISTOGRAMS.get(name)
+    if histogram is not None:
+        try:
+            value = float(data.get('value'))
+        except (TypeError, ValueError):
+            value = None
+        if value is not None and value >= 0:
+            # Low-cardinality dimensions only: matched route template + rating.
+            route = str(data.get('route') or 'unknown')[:64]
+            rating = str(data.get('rating') or 'unknown')[:16]
+            attributes = {'http.route': route, 'web.vital.rating': rating}
+            # web-vitals reports LCP/INP in milliseconds; record seconds.
+            histogram.record(value / 1000.0, attributes)
+            web_vital_reports.add(
+                1, {'web.vital.name': name, 'http.route': route})
+    return '', 204
 
 
 @bp.route('/search')
