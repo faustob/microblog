@@ -11,6 +11,8 @@ from app.main.forms import EditProfileForm, EmptyForm, PostForm, SearchForm, \
 from app.models import User, Post, Message, Notification
 from app.translate import translate
 from app.main import bp
+from app.telemetry import WEB_VITAL_HISTOGRAMS, WEB_VITAL_UNITS, \
+    web_vitals_reported
 
 
 @bp.before_app_request
@@ -160,6 +162,34 @@ def translate_text():
     return {'text': translate(data['text'],
                               data['source_language'],
                               data['dest_language'])}
+
+
+@bp.route('/vitals', methods=['POST'])
+def vitals():
+    """Receive Core Web Vitals measured in the browser (web-vitals library)
+    and record them as OpenTelemetry metrics on the server."""
+    data = request.get_json(silent=True) or {}
+    metric_name = str(data.get('name', '')).lower()
+    histogram = WEB_VITAL_HISTOGRAMS.get(metric_name)
+    if histogram is None:
+        return {'status': 'ignored'}, 202
+    try:
+        value = float(data.get('value'))
+    except (TypeError, ValueError):
+        return {'status': 'ignored'}, 202
+    if value < 0:
+        return {'status': 'ignored'}, 202
+    # LCP is reported in ms by web-vitals; record seconds per semconv style.
+    if WEB_VITAL_UNITS[metric_name] == 's':
+        value = value / 1000.0
+    attributes = {
+        'http.route': str(data.get('route', 'unknown'))[:100],
+        'web.vital.rating': str(data.get('rating', 'unknown'))[:20],
+        'device.class': str(data.get('device_class', 'unknown'))[:20],
+    }
+    histogram.record(value, attributes)
+    web_vitals_reported.add(1, {'web.vital.name': metric_name})
+    return {'status': 'ok'}, 202
 
 
 @bp.route('/search')

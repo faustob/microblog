@@ -14,7 +14,7 @@
         integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN"
         crossorigin="anonymous">
   </head>
-  <body>
+  <body data-route="{{ request.url_rule.rule if request.url_rule else 'unknown' }}">
     <nav class="navbar navbar-expand-lg bg-body-tertiary">
       <div class="container">
         <a class="navbar-brand" href="{{ url_for('main.index') }}">Microblog</a>
@@ -140,6 +140,43 @@
         }
       }
       document.addEventListener('DOMContentLoaded', initialize_popovers);
+
+      // Core Web Vitals (LCP, INP) reporter: measured in the browser with the
+      // web-vitals library and POSTed to the server, which records them as
+      // OpenTelemetry metrics. No OTel APIs run in the browser.
+      (function report_web_vitals() {
+        const endpoint = '{{ url_for('main.vitals') }}';
+        const route = document.body.dataset.route || 'unknown';
+        const deviceClass =
+          (navigator.userAgentData && navigator.userAgentData.mobile) ||
+          /Mobi|Android/i.test(navigator.userAgent) ? 'mobile' : 'desktop';
+        function send(metric) {
+          const body = JSON.stringify({
+            name: metric.name,
+            value: metric.value,
+            rating: metric.rating,
+            route: route,
+            device_class: deviceClass
+          });
+          if (navigator.sendBeacon) {
+            navigator.sendBeacon(endpoint, new Blob(
+              [body], {type: 'application/json'}));
+          } else {
+            fetch(endpoint, {
+              method: 'POST',
+              headers: {'Content-Type': 'application/json'},
+              body: body,
+              keepalive: true
+            });
+          }
+        }
+        import('https://cdn.jsdelivr.net/npm/web-vitals@4/dist/web-vitals.attribution.js')
+          .then(({onLCP, onINP}) => {
+            onLCP(send);
+            onINP(send);
+          })
+          .catch(() => {});
+      })();
 
       function set_message_count(n) {
         const count = document.getElementById('message_count');
