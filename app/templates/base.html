@@ -141,6 +141,38 @@
       }
       document.addEventListener('DOMContentLoaded', initialize_popovers);
 
+      // Core Web Vitals (RUM): collect LCP/INP in the browser and POST them to
+      // the server, which records them on the OpenTelemetry meter.
+      (function report_web_vitals() {
+        const route = {{ (request.url_rule.rule if request.url_rule else request.path)|tojson }};
+        const deviceClass =
+          /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) ? 'mobile' : 'desktop';
+        function send(metric) {
+          const body = JSON.stringify({
+            name: metric.name,
+            value: metric.value,
+            rating: metric.rating,
+            route: route,
+            device_class: deviceClass
+          });
+          const url = {{ url_for('main.web_vitals')|tojson }};
+          if (navigator.sendBeacon) {
+            navigator.sendBeacon(url, new Blob([body], {type: 'application/json'}));
+          } else {
+            fetch(url, {
+              method: 'POST',
+              headers: {'Content-Type': 'application/json'},
+              body: body,
+              keepalive: true
+            });
+          }
+        }
+        import('https://unpkg.com/web-vitals@4?module').then(({onLCP, onINP}) => {
+          onLCP(send);
+          onINP(send);
+        }).catch(() => {});
+      })();
+
       function set_message_count(n) {
         const count = document.getElementById('message_count');
         count.innerText = n;

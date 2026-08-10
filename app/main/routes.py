@@ -11,6 +11,8 @@ from app.main.forms import EditProfileForm, EmptyForm, PostForm, SearchForm, \
 from app.models import User, Post, Message, Notification
 from app.translate import translate
 from app.main import bp
+from app.telemetry import (WEB_VITAL_HISTOGRAMS, web_vital_reports_total,
+                          WEB_VITAL_UNITS)
 
 
 @bp.before_app_request
@@ -225,6 +227,35 @@ def export_posts():
         current_user.launch_task('export_posts', _('Exporting posts...'))
         db.session.commit()
     return redirect(url_for('main.user', username=current_user.username))
+
+
+@bp.route('/vitals', methods=['POST'])
+def web_vitals():
+    """Receive Core Web Vitals measurements from the browser (RUM) and record
+    them on the server-side OpenTelemetry meter."""
+    data = request.get_json(silent=True) or {}
+    name = str(data.get('name', '')).lower()
+    histogram = WEB_VITAL_HISTOGRAMS.get(name)
+    if histogram is None:
+        return {'status': 'ignored'}
+    try:
+        value = float(data.get('value'))
+    except (TypeError, ValueError):
+        return {'status': 'ignored'}
+    # LCP/INP arrive from web-vitals in milliseconds; record durations in
+    # seconds per OTel convention. CLS is unitless.
+    if WEB_VITAL_UNITS[name] == 's':
+        value = value / 1000.0
+    # Low-cardinality dimensions only: matched route TEMPLATE, never raw paths.
+    route = str(data.get('route') or 'unknown')[:64]
+    attributes = {
+        'http.route': route,
+        'web.vital.rating': str(data.get('rating') or 'unknown')[:16],
+        'device.class': str(data.get('device_class') or 'unknown')[:16],
+    }
+    histogram.record(value, attributes)
+    web_vital_reports_total.add(1, dict(attributes, **{'web.vital.name': name}))
+    return {'status': 'ok'}
 
 
 @bp.route('/notifications')

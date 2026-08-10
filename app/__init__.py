@@ -32,6 +32,12 @@ def create_app(config_class=Config):
     app = Flask(__name__)
     app.config.from_object(config_class)
 
+    # Build and register the global OpenTelemetry providers exactly once,
+    # before any instrumented code runs, then instrument this Flask app.
+    from app.telemetry import init_telemetry, instrument_flask_app
+    init_telemetry()
+    instrument_flask_app(app)
+
     db.init_app(app)
     migrate.init_app(app, db)
     login.init_app(app)
