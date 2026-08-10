@@ -11,6 +11,8 @@ from app.main.forms import EditProfileForm, EmptyForm, PostForm, SearchForm, \
 from app.models import User, Post, Message, Notification
 from app.translate import translate
 from app.main import bp
+from app.telemetry import (WEB_VITAL_HISTOGRAMS, web_vital_reports_total,
+                          normalize_vital_rating)
 
 
 @bp.before_app_request
@@ -225,6 +227,37 @@ def export_posts():
         current_user.launch_task('export_posts', _('Exporting posts...'))
         db.session.commit()
     return redirect(url_for('main.user', username=current_user.username))
+
+
+@bp.route('/api/vitals', methods=['POST'])
+def web_vitals():
+    """Collector endpoint for Core Web Vitals reported by the browser.
+
+    The client half holds no OpenTelemetry code: it simply POSTs the
+    measurements captured by the web-vitals library, and they are recorded
+    here with the server meter.
+    """
+    data = request.get_json(silent=True) or {}
+    name = str(data.get('name', '')).lower()
+    histogram = WEB_VITAL_HISTOGRAMS.get(name)
+    if histogram is None:
+        return {'status': 'ignored'}, 202
+    try:
+        value = float(data.get('value'))
+    except (TypeError, ValueError):
+        return {'status': 'ignored'}, 202
+    # Route TEMPLATE only (e.g. /user/<username>) — never the raw URL.
+    route = str(data.get('route') or 'unknown')[:128]
+    attributes = {
+        'http.route': route,
+        'web.vital.name': name,
+        'web.vital.rating': normalize_vital_rating(data.get('rating')),
+        'device.class': 'mobile' if data.get('mobile') else 'desktop',
+    }
+    # LCP is reported in ms by web-vitals; record seconds per semconv style.
+    histogram.record(value / 1000.0 if name == 'lcp' else value, attributes)
+    web_vital_reports_total.add(1, attributes)
+    return {'status': 'ok'}, 204
 
 
 @bp.route('/notifications')
